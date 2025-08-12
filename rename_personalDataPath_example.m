@@ -25,18 +25,22 @@ addpath(jsonlab_folder)
 
 
 %% name recognizable part of a file of which the content should be evaluated
-
+cfg(1).longterm_acute = 0; % long-term iEEG (0) or acute iEEG (1)
 cfg(1).filename = {'electrodes.tsv'};
-cfg(2).filename = {'N1sChecked.mat'};
+cfg(2).filename = {'N1sChecked.mat'}; %example long-term iEEG file
 
 %% name the fields that should be add to the final version of a file
 
-% all fields in electrodes.tsv:
+% all fields in long-term iEEG electrodes.tsv:
 %    {'name','x','y','z','size','material','manufacturer','group',...
 %     'hemisphere','silicon','soz','resected','edge','DKT_label',...
 %     'DKT_label_text','Destrieux_label','Destrieux_label_text','Wang_label',...
 %     'Wang_label_text','Benson_label','Benson_label_text','Benson_eccen',...
 %     'Benson_polarangle','Benson_sigma'};
+%
+% all fields in acute iEEG electrodes.tsv:
+% {"name","x":,"y","z","size","material","manufacturer","group","hemisphere",...
+%  "silicon","cavity","resected","edge"};
 
 cfg(1).reqFields = {'name','group','silicon','soz','resected','edge'}; % accompanies cfg(1).filename
 cfg(2).reqFields = {'n1_peak_sample','amplitude_thresh','n1_peak_range','dataName','ch',...

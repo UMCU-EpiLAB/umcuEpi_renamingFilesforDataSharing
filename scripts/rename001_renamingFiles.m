@@ -1,6 +1,7 @@
 %% renaming files
 % author: Dorien van Blooijs
 % date: May 2021
+% adjusted for acute ECoG: Sem Hoogteijling - November 2023
 
 % first, several OPTIONS are programmed to: 
 % 1. change participants.tsv to contain only the participants that are
@@ -63,10 +64,16 @@ for ii = 1:size(particip_tsv,1)
         subContent = dir(fullfile(myDataPath.shareFolder,particip_tsv.participant_id{ii}));
         idx_ses = contains({subContent(:).name},'ses-');
         ses = {subContent(idx_ses).name};
-
-        if sum(contains(ses,particip_tsv.session(ii))) == 1
-            keep = [keep, ii]; %#ok<AGROW> 
+        
+        if cfg(1).longterm_acute == 1
+            ses = regexprep(ses,'ses-SITUATION','');
+            ses_new = {strjoin(ses,',')};
+            particip_tsv.session(ii) = ses_new; %store all sessions found in folder
+            keep = [keep, ii];
+        elseif sum(contains(ses,particip_tsv.session(ii))) == 1
+            keep = [keep, ii]; %#ok<AGROW>
         end
+
     else
 
     end
@@ -77,7 +84,7 @@ particip_tsv(del,:) = [];
 writetable(particip_tsv, fileList{idx_particip_tsv}, 'Delimiter', 'tab', 'FileType', 'text');% save file
 
 % housekeeping
-clear del dirNam folderContent idx_particip idx_particip_tsv idx_ses ii keep particip particip_tsv ses subContent
+clear del dirName folderContent idx_particip idx_particip_tsv idx_ses ii keep particip particip_tsv ses subContent
 
 %% 2. OPTIONAL: change content of scans.tsv if not all scans are going to be shared
 
@@ -93,6 +100,13 @@ for ii = 1: size(idx_scans_tsv,1) % for each scans.tsv file
     folderContent = dir(fullfile(folder,'ieeg'));
     idx_scans = contains({folderContent(:).name},'.eeg');
     scans = {folderContent(idx_scans).name};
+
+    if cfg(1).longterm_acute == 1
+        folderContent = getAllFiles(folder);
+        idx_scans = contains(folderContent,'.eeg');
+        scans = folderContent(idx_scans);
+    end
+
 
     % keep only the mentioned eegs in scans.tsv if present in folder to be
     % shared
@@ -114,7 +128,7 @@ for ii = 1: size(idx_scans_tsv,1) % for each scans.tsv file
 end
 
 % housekeeping
-clear del dirName filename folder folderContent idx_scans idx_scans_tsv ii jj keep scans scans_tsv 
+clear del filename folder folderContent idx_scans idx_scans_tsv ii jj keep scans scans_tsv 
 
 %% 3. OPTIONAL: rename datasetDescriptor
 
@@ -132,44 +146,42 @@ clear dataDesc idx_dataDesc
 %% 4. OPTIONAL: change electrode positions in electrodes.tsv to MNI space (instead of positions on the individual brain)
 % THIS IS REQUIRED FOR SHARING DATA IN PUBLICLY AVAILABLE DATASETS!!!
 
-idx = contains(fileList,'electrodes.tsv')==0;
+if cfg(1).longterm_acute == 0
+    idx = contains(fileList,'electrodes.tsv')==0;
+    
+    fileList_elec = fileList;
+    fileList_elec(idx) = [];
+    
+    for subj = 1:size(fileList_elec,1)
 
-fileList_elec = fileList;
-fileList_elec(idx) = [];
-
-for subj = 1:size(fileList_elec,1)
-
-    convertElec2MNI(myDataPath,fileList_elec{subj});
-
+        convertElec2MNI(myDataPath,fileList_elec{subj});
+    
+    end
+    disp('Conversion to MNI space is completed.')
+     
+    % housekeeping
+    clear fileList_elec idx subj
 end
-
-disp('Conversion to MNI space is completed.')
-
-% housekeeping
-clear fileList_elec idx subj
 
 %% 5. OPTIONAL: change content of specific files (uses cfg.reqFields defined in personalDataPath.m)
 reduceFiles = input('Do you want to reduce the variables in some specific files, and did you specify this in personalDataPath.m? [y/n]: ','s');
 
 if strcmp(reduceFiles,'y')
-    % get all files
-    fileList = getAllFiles(dirName);
 
     % change what specific files should contain
 
     for jj = 1:size(cfg,2)
 
         if ~isempty(cfg(jj).reqFields)
-            for ii = 1:size(fileList,1)
+            idx_cfg_filename = find(contains(fileList,cfg(jj).filename{1})==1);
+            for ii = 1:size(idx_cfg_filename,1)
                 clear Variable newVariable Variable_tsv
 
-                if contains(fileList{ii},cfg(jj).filename{1})
-
-                    [~,~,fileExt] = fileparts(fileList{ii});
+                    [~,~,fileExt] = fileparts(fileList{idx_cfg_filename(ii)});
 
                     if strcmp(fileExt,'.tsv')
                         % load file
-                        Variable = readtable(fileList{ii},'FileType','text','Delimiter','\t');
+                        Variable = readtable(fileList{idx_cfg_filename(ii)},'FileType','text','Delimiter','\t');
 
                         % add all columns that are required
                         for k = 1:size(cfg(jj).reqFields,2)
@@ -182,11 +194,11 @@ if strcmp(reduceFiles,'y')
                         bids_tsv_nan2na(Variable_tsv);
 
                         % save table
-                        writetable(Variable_tsv, fileList{ii}, 'Delimiter', 'tab', 'FileType', 'text');
+                        writetable(Variable_tsv, fileList{idx_cfg_filename(ii)}, 'Delimiter', 'tab', 'FileType', 'text');
 
                     elseif strcmp(fileExt,'.mat')
                         % load file
-                        Variable = load(fileList{ii});
+                        Variable = load(fileList{idx_cfg_filename(ii)});
 
                         % add all columns that are required
                         for k = 1:size(cfg(jj).reqFields,2)
@@ -194,29 +206,28 @@ if strcmp(reduceFiles,'y')
                         end
 
                         % save mat-file
-                        save(fileList{ii},'-struct','newVariable')
+                        save(fileList{idx_cfg_filename(ii)},'-struct','newVariable')
                     
                     elseif strcmp(fileExt,'.json')
-                        Variable = read_json(fileList{ii});
+                        Variable = read_json(fileList{idx_cfg_filename(ii)});
 
                         % add all columns that are required
                         for k = 1:size(cfg(jj).reqFields,2)
                             newVariable.(cfg(jj).reqFields{k}) = Variable.(cfg(jj).reqFields{k});
                         end
 
-                        write_json(fileList{ii},newVariable)
+                        write_json(fileList{write_st(fileList{idx_cfg_filename(ii)},newVariable)},newVariable)
                     else
-                        warning('For this file %s, no code has been written yet',fileList{ii})
+                        warning('For this file %s, no code has been written yet',fileList{idx_cfg_filename(ii)})
 
                     end
-                end
             end
         end
     end
 end
 
 % housekeeping
-clear reduceFiles jj ii k fileExt Variable newVariable Variable_tsv 
+clear reduceFiles jj ii k fileExt Variable newVariable Variable_tsv idx_cfg_filename 
 
 %% ESSENTIAL: rename variables containing the name and move them to new named directory
 
@@ -259,7 +270,7 @@ for ii = 1:size(fileList,1)
         renameFileContent(fileList{ii},indivkey,renamekey,checkTRC)
 
         % rename FILENAME and move file to new location
-        if any(strcmp(nameExt,{'.vhdr','.vmkr','.eeg'}))
+        if any(strcmp(nameExt,{'.vhdr','.vmrk','.eeg'}))
             % do not copy because it is already written by
             % renameFileContent!
         else
